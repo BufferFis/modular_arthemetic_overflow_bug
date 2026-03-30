@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parent
 MONT_FILE = ROOT / "montgomery_attack_results.csv"
 BARR_FILE = ROOT / "barrett_attack_results.csv"
-OUT_DIR = ROOT / "graphs"
+OUT_DIR = ROOT / "graphs/Scenario4"
 
 
 def read_csv_rows(path):

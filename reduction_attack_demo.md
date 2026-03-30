@@ -31,6 +31,36 @@ Generated at runtime:
 - **Impact:** Residue no longer equals `x mod n` for crafted large inputs.
 - **Prevention:** Safe path performs quotient approximation and full correction with wide arithmetic.
 
+## Worked Example
+
+### Montgomery Vulnerability Example
+Suppose the system uses 16-bit words. The attacker submits:
+- $a = 60,000$
+- $b = 2,000$
+- $n = 65,521$ (a prime)
+
+**Expected (mathematically):**
+$(60,000 \times 2,000) \bmod 65,521 = 120,000,000 \bmod 65,521 = 22,678$
+
+**Vulnerable implementation:**
+- Computes $60,000 \times 2,000 = 120,000,000$
+- Truncates to 16 bits: $120,000,000 \bmod 2^{16} = 120,000,000 \bmod 65,536 = 32,768$
+- Applies REDC to $32,768$ instead of $120,000,000$
+- Result is wrong: attacker can exploit this to bypass checks or forge values.
+
+### Barrett Vulnerability Example
+Suppose the system uses 16-bit words. The attacker submits:
+- $x = 4,000,000,000$
+- $n = 65,521$
+
+**Expected (mathematically):**
+$4,000,000,000 \bmod 65,521 = 8471$
+
+**Vulnerable implementation:**
+- Approximates quotient and corrects only once, with all steps in 16 bits
+- Gets a wrong residue, e.g., $3,999,934,479$ (not $8471$)
+- Attacker can exploit this to break cryptographic logic.
+
 ## Test Cases
 Each method has **5 test cases**.
 
