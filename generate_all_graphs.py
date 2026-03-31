@@ -1,0 +1,165 @@
+import webbrowser
+import os
+
+def create_report():
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vulnerability Metrics & Explanations</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+            .container { max-width: 1200px; margin: auto; }
+            h1 { text-align: center; color: #ffffff; margin-bottom: 40px; font-size: 2.5em; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .vuln-section { background: #1e1e1e; border-radius: 12px; padding: 25px; margin-bottom: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: flex; flex-wrap: wrap; gap: 20px; }
+            .chart-container { flex: 1 1 500px; position: relative; height: 350px; background: #252528; border-radius: 8px; padding: 15px; }
+            .text-container { flex: 1 1 400px; }
+            .text-container h2 { color: #50fa7b; margin-top: 0; }
+            .text-container p { line-height: 1.6; font-size: 1.1em; color: #b0b0b0; }
+            .vuln-red { color: #f38ba8; font-weight: bold; }
+            .vuln-green { color: #a6e3a1; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Comprehensive Vulnerability Analysis Report</h1>
+
+            <!-- C uint8 Overflow -->
+            <div class="vuln-section">
+                <div class="text-container">
+                    <h2>1. C uint8 Overflow (Shopping Cart)</h2>
+                    <p><strong>Mechanism:</strong> A multiplication operation on 8-bit unsigned integers causes values exceeding 255 to wrap around to low values (e.g., 200 * 2 = 400 = 144 modulo 256).</p>
+                    <p><strong>Exploit:</strong> Attackers intentionally order high quantities so the total price overflows into a small value, bypassing the bank balance check.</p>
+                    <p><strong>Fix:</strong> <span class="vuln-green">size_t</span> was implemented to calculate the true cost with bounds checking prior to execution.</p>
+                </div>
+                <div class="chart-container"><canvas id="cOverflowChart"></canvas></div>
+            </div>
+
+            <!-- Java int Overflow -->
+            <div class="vuln-section">
+                <div class="text-container">
+                    <h2>2. Java int32 Overflow</h2>
+                    <p><strong>Mechanism:</strong> Standard 32-bit signed integers in Java wrap into negative values when exceeding 2,147,483,647.</p>
+                    <p><strong>Exploit:</strong> Very large quantity attacks force the total cost into negative values, tricking the "is cost &lt; balance" logic and crediting instead of deducting the attacker.</p>
+                    <p><strong>Fix:</strong> Shifted to <span class="vuln-green">BigInteger</span> APIs ensuring theoretically infinite precision memory allocation during calculations.</p>
+                </div>
+                <div class="chart-container"><canvas id="javaOverflowChart"></canvas></div>
+            </div>
+
+            <!-- Java BigInt Migration -->
+            <div class="vuln-section">
+                <div class="text-container">
+                    <h2>3. Improper BigInteger Migration</h2>
+                    <p><strong>Mechanism:</strong> Using <span class="vuln-red">.intValue()</span> at the very end of a BigInteger workflow immediately squashes the safely calculated number back into a 32-bit space.</p>
+                    <p><strong>Exploit:</strong> Exploited exactly like a standard Java int32 overflow; the math was safe, but the storage cast broke the boundaries.</p>
+                    <p><strong>Fix:</strong> Replace type-casting with <span class="vuln-green">.compareTo()</span> logic to natively keep validation strictly within the BigInteger class.</p>
+                </div>
+                <div class="chart-container"><canvas id="bigIntMigChart"></canvas></div>
+            </div>
+
+            <!-- Nuclear Gandhi -->
+            <div class="vuln-section">
+                <div class="text-container">
+                    <h2>4. Nuclear Gandhi (8-bit Underflow)</h2>
+                    <p><strong>Mechanism:</strong> Unsigned integer underflow triggers when subtraction falls below 0, wrapping strictly around to 255.</p>
+                    <p><strong>Exploit:</strong> Starting with a peaceful value of <span class="vuln-green">4</span>, applying a democracy discount forces underflow. The result wraps backwards, granting Gandhi a <span class="vuln-red">highly aggresive nuclear maglomanian</span> score of 250+.</p>
+                    <p><strong>Fix:</strong> Simple conditional boundaries checking <span class="vuln-green">if (gandhi >= modifier)</span> before modifying.</p>
+                </div>
+                <div class="chart-container"><canvas id="gandhiChart"></canvas></div>
+            </div>
+
+            <!-- Modular Reduction -->
+            <div class="vuln-section">
+                <div class="text-container">
+                    <h2>5. Modular Reduction (Montgomery/Barrett)</h2>
+                    <p><strong>Mechanism:</strong> Intermediate truncation flaws or incorrect approximation bounds skipping final mathematical loops.</p>
+                    <p><strong>Exploit:</strong> Attacker introduces specific lengths to systematically avoid the necessary while-loop correction in Barrett reduction, or truncates precision registers in Montgomery.</p>
+                    <p><strong>Fix:</strong> Correct recursive loop implementations strictly bounded to mathematical theorem specs instead of hardware optimisations.</p>
+                </div>
+                <div class="chart-container"><canvas id="modRedChart"></canvas></div>
+            </div>
+            
+            <!-- CIA Triad Comparison -->
+            <div class="vuln-section" style="justify-content: center;">
+                 <div class="text-container" style="text-align: center; max-width: 800px;">
+                    <h2>CIA Security Assessment Across All Vectors</h2>
+                    <p>Average loss of Availability, Integrity, and Confidentiality when exploits are engaged versus patched.</p>
+                </div>
+                <div class="chart-container" style="height: 400px; width: 100%; flex-basis: 100%;"><canvas id="ciaChart"></canvas></div>
+            </div>
+
+        </div>
+
+        <script>
+            Chart.defaults.color = "#a0a0a0";
+            
+            const chartOptions = {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            };
+
+            // 1. C overflow Chart
+            new Chart(document.getElementById('cOverflowChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels: ['Normal Load', 'Overflow Target', 'Resulting Wrapper value'], datasets: [{ label: 'Integer Variables', data: [50, 300, 44], backgroundColor: ['#89b4fa', '#f38ba8', '#f9e2af'] }] },
+                options: { ...chartOptions, plugins: { title: { display: true, text: 'Expected Value vs Wrapped Byte' } } }
+            });
+
+            // 2. Java Int Overflow Chart
+            new Chart(document.getElementById('javaOverflowChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels: ['Expected Millions', 'Vulnerable Value', 'Fixed BigInt'], datasets: [{ data: [2147483647, -2000000000, 2147483647], backgroundColor: ['#89b4fa', '#f38ba8', '#a6e3a1'] }] },
+                options: { ...chartOptions, plugins: { title: { display: true, text: 'Signed Int32 Crossing Zero Barrier' } } }
+            });
+
+            // 3. BigInt Migration Chart
+            new Chart(document.getElementById('bigIntMigChart').getContext('2d'), {
+                type: 'line',
+                data: { labels: ['Input', 'Calculate', 'Cast .intValue()', 'Memory Boundary'], datasets: [{ label: 'Data Accuracy', data: [100, 100, 15, 0], borderColor: '#f38ba8', tension: 0.3, fill: true, backgroundColor: 'rgba(243, 139, 168, 0.2)' }] },
+                options: { ...chartOptions, plugins: { title: { display: true, text: 'Accuracy Loss from Type-casting' } } }
+            });
+
+            // 4. Nuclear Gandhi Chart
+            new Chart(document.getElementById('gandhiChart').getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: ['Peaceful Baseline', 'Aggression Jump (Underflow)'], datasets: [{ data: [4, 251], backgroundColor: ['#a6e3a1', '#f38ba8'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' }, title: { display: true, text: 'Unsigned uint8 Deficit Cycle' } } }
+            });
+
+            // 5. Modular Reduction Chart
+            new Chart(document.getElementById('modRedChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels: ['Successful Reductions (Vuln)', 'Successful Reductions (Fix)', 'Exploits (Vuln)', 'Exploits (Fix)'], datasets: [{ data: [450, 1000, 550, 0], backgroundColor: ['#89b4fa', '#a6e3a1', '#f38ba8', '#a6e3a1'] }] },
+                options: { ...chartOptions, plugins: { title: { display: true, text: 'Reduction Accuracy Under Stress' } } }
+            });
+
+            // CIA Radar Chart
+            new Chart(document.getElementById('ciaChart').getContext('2d'), {
+                type: 'radar',
+                data: {
+                    labels: ['Confidentiality', 'Integrity', 'Availability'],
+                    datasets: [
+                        { label: 'Vulnerable System', data: [4, 1, 3], borderColor: '#f38ba8', backgroundColor: 'rgba(243, 139, 168, 0.4)', pointBackgroundColor: '#f38ba8' },
+                        { label: 'Secure System', data: [10, 10, 10], borderColor: '#a6e3a1', backgroundColor: 'rgba(166, 227, 161, 0.4)', pointBackgroundColor: '#a6e3a1' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 10, ticks: { display: false } } } }
+            });
+        </script>
+    </body>
+    </html>
+    """
+    
+    report_path = os.path.join(os.getcwd(), 'advanced_metrics_report.html')
+    with open(report_path, 'w') as f:
+        f.write(html_content)
+        
+    print(f"Generated report at: {report_path}")
+    webbrowser.open('file://' + report_path)
+
+if __name__ == "__main__":
+    create_report()
